@@ -27,6 +27,7 @@ print(f"Low threshold: sim={sim3:.3f}, hit={ans3 is not None}")
 
 for _ in range(5):
     cache.feedback("What is memcord?", positive=False)
+cache.threshold = 0.80  # reset to normal threshold
 ans4, _ = cache.check("What is memcord?")
 assert ans4 is None, "Should be deleted after downvotes"
 print("Feedback delete OK")

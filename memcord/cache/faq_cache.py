@@ -120,10 +120,16 @@ class FAQCache:
         """Record 👍 (positive=True) or 👎 feedback on the last match for this question."""
         embedding = self._model.encode([question])[0].tolist()
         results = self._collection.query(
-            query_embeddings=[embedding], n_results=1, include=["metadatas"]
+            query_embeddings=[embedding], n_results=1, include=["metadatas", "distances"]
         )
         if not results["ids"][0]:
             return
+
+        # Verify this is actually the right FAQ (similarity check)
+        # Use a high fixed threshold for feedback — false positives are catastrophic
+        similarity = 1.0 - results["distances"][0][0]
+        if similarity < 0.80:
+            return  # wrong FAQ matched — skip feedback
 
         meta = results["metadatas"][0][0]
         delta = 1 if positive else -1
