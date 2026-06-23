@@ -1,0 +1,48 @@
+[Unit]
+Description=Memcord — Self-learning Discord FAQ bot
+Documentation=https://github.com/vid/memcord
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=memcord
+Group=memcord
+WorkingDirectory=/opt/memcord
+
+# ── Environment ────────────────────────────────────────────
+EnvironmentFile=-/opt/memcord/.env
+Environment=PATH=/opt/memcord/.venv/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PYTHONUNBUFFERED=1
+Environment=MEMCORD_DATA_DIR=/opt/memcord/data
+Environment=MEMCORD_HEALTH_PORT=8080
+
+# ── Exec ───────────────────────────────────────────────────
+ExecStart=/opt/memcord/.venv/bin/python3 -m memcord.cli run
+
+# ── Restart ────────────────────────────────────────────────
+Restart=on-failure
+RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
+
+# ── Security hardening ─────────────────────────────────────
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/memcord/data
+ReadOnlyPaths=/opt/memcord
+
+# ── Resource limits ────────────────────────────────────────
+MemoryHigh=2G
+MemoryMax=3G
+CPUQuota=200%
+
+# ── Logging ────────────────────────────────────────────────
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=memcord
+
+[Install]
+WantedBy=multi-user.target

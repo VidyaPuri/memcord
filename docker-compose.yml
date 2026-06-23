@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  memcord:
+    build: .
+    image: memcord:latest
+    container_name: memcord
+    restart: unless-stopped
+    ports:
+      # Health check endpoint — map to host if you want external monitoring
+      - "${MEMCORD_HEALTH_PORT:-8080}:8080"
+    environment:
+      # ── Required ──
+      - DISCORD_TOKEN=${DISCORD_TOKEN:?DISCORD_TOKEN must be set}
+
+      # ── LLM Backend (choose one) ──
+      # Claude Code CLI
+      - MEMCORD_BACKEND=${MEMCORD_BACKEND:-claude_code}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - MEMCORD_MODEL=${MEMCORD_MODEL:-}
+
+      # OpenAI
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+
+      # Ollama (optional — point to host or another container)
+      - MEMCORD_OLLAMA_URL=${MEMCORD_OLLAMA_URL:-}
+
+      # ── Cache Settings ──
+      - MEMCORD_SIMILARITY_THRESHOLD=${MEMCORD_SIMILARITY_THRESHOLD:-0.80}
+      - MEMCORD_ADAPTIVE_THRESHOLD=${MEMCORD_ADAPTIVE_THRESHOLD:-true}
+      - MEMCORD_DATA_DIR=/app/memcord_data
+      - MEMCORD_HEALTH_PORT=${MEMCORD_HEALTH_PORT:-8080}
+
+    volumes:
+      # Persistent FAQ cache (ChromaDB + stats)
+      - memcord_data:/app/memcord_data
+
+      # Optional: mount .env from host
+      # - ./.env:/app/.env:ro
+
+    # Uncomment if you need to use host's docker socket (for Claude Code backend)
+    # volumes:
+    #   - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  memcord_data:
+    # Named volume for persistent cache data
