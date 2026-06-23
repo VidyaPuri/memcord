@@ -2,6 +2,10 @@
 
 Self-learning Discord FAQ bot with semantic caching. Listens to questions, learns which ones repeat, and serves cached answers without calling the LLM — regardless of which LLM backend you use.
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
+[![Discord](https://img.shields.io/badge/discord.py-2.3+-5865F2.svg)](https://discordpy.readthedocs.io/)
+
 ## The Problem
 
 Every AI Discord bot calls the LLM API for every single message. When 50 people ask "how do I install this?", you pay for 50 API calls and users wait 2-10 seconds each time.
@@ -10,7 +14,93 @@ Every AI Discord bot calls the LLM API for every single message. When 50 people 
 
 Memcord intercepts questions, checks if a semantically similar question has been answered before, and returns the cached answer instantly. Only genuinely new questions hit the LLM.
 
+```
+@memcord how do I install this?
+→ FAQ cache hit (similarity 97%) → instant reply, $0 cost
+
+@memcord can you explain quantum computing?
+→ FAQ cache miss → Claude Code → answer → cached for next time
+```
+
+## Features
+
+- **Semantic FAQ cache**: ChromaDB + SentenceBERT embeddings — matches "how do I install" with "how to install memcord"
+- **Adaptive threshold**: auto-tunes similarity cutoff based on real hit rate — no manual tuning
+- **LLM-agnostic**: Claude Code, OpenAI, Anthropic, Ollama, or [bring your own](#custom-backends)
+- **Feedback loop**: 👍👎 reactions improve the cache; 3 downvotes auto-deletes bad FAQs
+- **Pluggable backends**: one Protocol, four implementations, zero lock-in
+- **Admin commands**: `/faq-stats`, `/faq-add`, `/faq-list`, `/faq-threshold`, `/faq-adaptive`
+
+## Quick Start
+
+```bash
+git clone https://github.com/VidyaPuri/memcord
+cd memcord
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[openai]"  # or [anthropic] or [ollama]
+
+cp .env.example .env
+# Edit .env: add DISCORD_TOKEN, OPENAI_API_KEY, set MEMCORD_BACKEND=openai
+
+memcord run
+```
+
+### With Claude Code
+
+```bash
+npm install -g @anthropic-ai/claude-code
+# Set in .env: MEMCORD_BACKEND=claude_code, ANTHROPIC_API_KEY=...
+memcord run
+```
+
+### With Ollama (fully local)
+
+```bash
+ollama pull llama3
+# Set in .env: MEMCORD_BACKEND=ollama, MEMCORD_MODEL=llama3
+memcord run
+```
+
+## Backends
+
+| Backend | Command | Dependencies | API Cost |
+|---------|---------|-------------|----------|
+| Claude Code | `claude -p` via subprocess | `npm install -g @anthropic-ai/claude-code` | Anthropic |
+| OpenAI | Python SDK | `pip install memcord[openai]` | OpenAI |
+| Anthropic | Python SDK | `pip install memcord[anthropic]` | Anthropic |
+| Ollama | REST API | `pip install memcord[ollama]` | Free (local) |
+| Custom | Your own class | — | Your choice |
+
+## Custom Backends
+
+Implement the `LLMBackend` protocol:
+
+```python
+# my_backend.py
+class MyBackend:
+    async def ask(self, prompt: str, system: str | None = None) -> str:
+        return "your response"
+```
+
+Then run:
+```bash
+MEMCORD_BACKEND=custom MEMCORD_CUSTOM_BACKEND=my_backend.MyBackend memcord run
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `/faq-stats` | Show cache hit rate, FAQ count, threshold |
+| `/faq-add Q \| A` | Manually add a FAQ |
+| `/faq-list` | List recent FAQs |
+| `/faq-threshold 0.85` | Set similarity threshold, disable adaptive |
+| `/faq-adaptive` | Re-enable adaptive threshold mode |
+
 ## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full design.
 
 ```
 Discord message → FAQ Cache (ChromaDB) → [HIT: return cached] [MISS: LLM → cache → return]
@@ -18,25 +108,10 @@ Discord message → FAQ Cache (ChromaDB) → [HIT: return cached] [MISS: LLM →
                                               Feedback loop (👍👎)
 ```
 
-## Features
-
-- **Semantic FAQ cache**: ChromaDB + SentenceBERT embeddings
-- **Adaptive threshold**: auto-tunes similarity cutoff based on hit rate
-- **LLM-agnostic**: Claude Code, OpenAI, Anthropic, Ollama, or custom
-- **Feedback loop**: 👍👎 reactions improve the cache
-- **Admin commands**: /faq-stats, /faq-add, /faq-remove, /faq-threshold
-- **Zero config startup**: `pip install -e . && memcord run`
-
-## Quick Start
-
-```bash
-git clone https://github.com/yourusername/memcord
-cd memcord
-pip install -e .
-cp .env.example .env  # add DISCORD_TOKEN + LLM keys
-memcord run
-```
-
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE)
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md)
