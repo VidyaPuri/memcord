@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import time
-
-import pytest
-
 from memcord.cache import FAQCache
 
 
@@ -248,9 +243,9 @@ class TestFAQCacheStats:
 
     def test_stats_hit_rate(self, cache):
         """Hit rate should be correctly calculated."""
-        cache.store("Q1?", "A1")
-        cache.check("Q1?")  # hit
-        cache.check("Q2?")  # miss
+        cache.store("What is the capital of France?", "Paris")
+        cache.check("What is the capital of France?")  # hit
+        cache.check("How do I bake chocolate chip cookies?")  # miss
 
         s = cache.stats
         assert s["total_queries"] == 2
@@ -340,7 +335,6 @@ class TestFAQCacheConsolidation:
         # Temporarily lower threshold so we can test with manually stored distinct items
         cache.store("What is memcord?", "A self-learning FAQ Discord bot")
         cache.store("What exactly is memcord?", "A self-learning FAQ Discord bot")
-        before = cache.stats["cached_faqs"]
         merged = cache.consolidate()
         # May or may not merge depending on embedding similarity
         assert isinstance(merged, int)

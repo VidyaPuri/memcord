@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-import os
-import signal
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

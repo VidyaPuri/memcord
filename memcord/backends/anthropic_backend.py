@@ -39,9 +39,7 @@ class AnthropicBackend(BaseBackend):
         retry_delay: float | None = None,
     ) -> None:
         if not _ANTHROPIC_AVAILABLE:
-            raise ImportError(
-                "pip install memcord[anthropic] to use Anthropic backend"
-            )
+            raise ImportError("pip install memcord[anthropic] to use Anthropic backend")
         super().__init__(
             timeout=timeout,
             max_retries=max_retries,

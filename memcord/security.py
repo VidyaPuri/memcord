@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import string
 import sys
 
 log = logging.getLogger("memcord.security")
@@ -95,11 +94,11 @@ def check_prompt_injection(text: str) -> bool:
 
 # Known placeholder patterns
 _PLACEHOLDER_PATTERNS = [
-    r"^\**$",                     # all asterisks
-    r"^<.*>$",                    # angle-bracket placeholder
-    r"^your[-_].*$",              # "your-token-here"
-    r"^change[-_]?me$",           # "changeme"
-    r"^xxx+$",                    # "xxx"
+    r"^\**$",  # all asterisks
+    r"^<.*>$",  # angle-bracket placeholder
+    r"^your[-_].*$",  # "your-token-here"
+    r"^change[-_]?me$",  # "changeme"
+    r"^xxx+$",  # "xxx"
     r"^placeholder$",
     r"^put[-_].*here$",
 ]
@@ -137,9 +136,7 @@ def validate_env() -> None:
     if backend == "claude_code":
         anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
         if not anthropic_key:
-            errors.append(
-                "MEMCORD_BACKEND=claude_code requires ANTHROPIC_API_KEY to be set."
-            )
+            errors.append("MEMCORD_BACKEND=claude_code requires ANTHROPIC_API_KEY to be set.")
     elif backend == "openai":
         openai_key = os.getenv("OPENAI_API_KEY", "")
         if not openai_key:
@@ -147,9 +144,7 @@ def validate_env() -> None:
     elif backend == "anthropic":
         anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
         if not anthropic_key:
-            errors.append(
-                "MEMCORD_BACKEND=anthropic requires ANTHROPIC_API_KEY to be set."
-            )
+            errors.append("MEMCORD_BACKEND=anthropic requires ANTHROPIC_API_KEY to be set.")
 
     # ── Threshold validation ──
     sim_threshold = os.getenv("MEMCORD_SIMILARITY_THRESHOLD", "0.80")
@@ -160,9 +155,7 @@ def validate_env() -> None:
                 f"MEMCORD_SIMILARITY_THRESHOLD={sim_threshold!r} is out of range (0.0–1.0)."
             )
     except ValueError:
-        errors.append(
-            f"MEMCORD_SIMILARITY_THRESHOLD={sim_threshold!r} is not a valid float."
-        )
+        errors.append(f"MEMCORD_SIMILARITY_THRESHOLD={sim_threshold!r} is not a valid float.")
 
     feedback_threshold = os.getenv("MEMCORD_FEEDBACK_THRESHOLD", "0.80")
     try:
@@ -172,18 +165,14 @@ def validate_env() -> None:
                 f"MEMCORD_FEEDBACK_THRESHOLD={feedback_threshold!r} is out of range (0.0–1.0)."
             )
     except ValueError:
-        errors.append(
-            f"MEMCORD_FEEDBACK_THRESHOLD={feedback_threshold!r} is not a valid float."
-        )
+        errors.append(f"MEMCORD_FEEDBACK_THRESHOLD={feedback_threshold!r} is not a valid float.")
 
     # ── Health port ──
     health_port = os.getenv("MEMCORD_HEALTH_PORT", "8080")
     try:
         val = int(health_port)
         if val < 0 or val > 65535:
-            errors.append(
-                f"MEMCORD_HEALTH_PORT={health_port!r} is out of range (0–65535)."
-            )
+            errors.append(f"MEMCORD_HEALTH_PORT={health_port!r} is out of range (0–65535).")
     except ValueError:
         errors.append(f"MEMCORD_HEALTH_PORT={health_port!r} is not a valid integer.")
 
@@ -192,13 +181,9 @@ def validate_env() -> None:
     try:
         val = int(max_input)
         if val < 1:
-            errors.append(
-                f"MEMCORD_MAX_INPUT_LENGTH={max_input!r} must be a positive integer."
-            )
+            errors.append(f"MEMCORD_MAX_INPUT_LENGTH={max_input!r} must be a positive integer.")
     except ValueError:
-        errors.append(
-            f"MEMCORD_MAX_INPUT_LENGTH={max_input!r} is not a valid integer."
-        )
+        errors.append(f"MEMCORD_MAX_INPUT_LENGTH={max_input!r} is not a valid integer.")
 
     # ── Report errors ──
     if errors:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import os
 import signal
@@ -26,6 +27,7 @@ log = logging.getLogger("memcord")
 
 # ── token redaction ─────────────────────────────────────────
 
+
 def _redact_token(token: str) -> str:
     """Redact a Discord token for safe logging: show only first 6 and last 4 chars."""
     if not token:
@@ -41,6 +43,7 @@ _TOKEN = os.getenv("DISCORD_TOKEN", "")
 def _get_backend():
     """Instantiate backend based on env vars — delegates to the factory."""
     from memcord.backends import get_backend
+
     return get_backend()
 
 
@@ -94,11 +97,8 @@ async def _async_run(health_port: int, token: str, metrics_enabled: bool = True)
 
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
+        with contextlib.suppress(NotImplementedError):
             loop.add_signal_handler(sig, lambda: asyncio.ensure_future(shutdown()))
-        except NotImplementedError:
-            # Windows doesn't support add_signal_handler
-            pass
 
     try:
         await bot.start(token)
@@ -162,6 +162,7 @@ def main():
 
     if args.command == "version":
         from memcord import __version__
+
         print(f"memcord v{__version__}")
     elif args.command == "run":
         run(health_port=args.health_port, metrics=args.metrics)

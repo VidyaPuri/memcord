@@ -120,9 +120,7 @@ class Metrics:
             calls = self._llm_calls
             avg_latency = self._llm_latency_sum_ms / max(calls, 1)
             samples = self._llm_latency_samples
-            recent_avg = (
-                sum(samples) / max(len(samples), 1) if samples else 0.0
-            )
+            recent_avg = sum(samples) / max(len(samples), 1) if samples else 0.0
             total_cache = self._cache_hits + self._cache_misses
             return {
                 "uptime_seconds": round(time.time() - self._start_time, 1),
@@ -130,15 +128,11 @@ class Metrics:
                 "llm_errors": self._llm_errors,
                 "llm_latency_avg_ms": round(avg_latency, 1),
                 "llm_latency_recent_avg_ms": round(recent_avg, 1),
-                "llm_latency_min_ms": (
-                    round(self._llm_latency_min_ms, 1) if calls > 0 else 0.0
-                ),
+                "llm_latency_min_ms": (round(self._llm_latency_min_ms, 1) if calls > 0 else 0.0),
                 "llm_latency_max_ms": round(self._llm_latency_max_ms, 1),
                 "cache_hits": self._cache_hits,
                 "cache_misses": self._cache_misses,
-                "cache_hit_rate": round(
-                    self._cache_hits / max(total_cache, 1), 3
-                ),
+                "cache_hit_rate": round(self._cache_hits / max(total_cache, 1), 3),
                 "feedback_up": self._feedback_up,
                 "feedback_down": self._feedback_down,
                 "faq_deletions": self._faq_deletions,
@@ -161,9 +155,7 @@ class Metrics:
 
     # ── periodic logging ──────────────────────────────────────
 
-    async def start_periodic_logging(
-        self, interval: int = 300
-    ) -> asyncio.Task:
+    async def start_periodic_logging(self, interval: int = 300) -> asyncio.Task:
         """Start a background task that logs a metrics summary every *interval* seconds.
 
         The task exports JSON on every tick as well.

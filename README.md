@@ -2,6 +2,7 @@
 
 Self-learning Discord FAQ bot with semantic caching. Listens to questions, learns which ones repeat, and serves cached answers without calling the LLM — regardless of which LLM backend you use.
 
+[![CI](https://github.com/VidyaPuri/memcord/actions/workflows/ci.yml/badge.svg)](https://github.com/VidyaPuri/memcord/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![Discord](https://img.shields.io/badge/discord.py-2.3+-5865F2.svg)](https://discordpy.readthedocs.io/)
@@ -74,12 +75,14 @@ memcord run
 
 ## Custom Backends
 
-Implement the `LLMBackend` protocol:
+Implement `BaseBackend` to get retry, timeout, and circuit-breaker for free:
 
 ```python
 # my_backend.py
-class MyBackend:
-    async def ask(self, prompt: str, system: str | None = None) -> str:
+from memcord.backends.base import BaseBackend
+
+class MyBackend(BaseBackend):
+    async def _ask_impl(self, prompt: str, system: str | None = None) -> str:
         return "your response"
 ```
 
@@ -90,13 +93,17 @@ MEMCORD_BACKEND=custom MEMCORD_CUSTOM_BACKEND=my_backend.MyBackend memcord run
 
 ## Commands
 
+Memcord uses `!` as its command prefix (to avoid colliding with Discord's native slash commands).
+
 | Command | Description |
 |---------|-------------|
-| `/faq-stats` | Show cache hit rate, FAQ count, threshold |
-| `/faq-add Q \| A` | Manually add a FAQ |
-| `/faq-list` | List recent FAQs |
-| `/faq-threshold 0.85` | Set similarity threshold, disable adaptive |
-| `/faq-adaptive` | Re-enable adaptive threshold mode |
+| `!faq-stats` | Show cache hit rate, FAQ count, threshold |
+| `!faq-metrics` | Show detailed metrics (LLM calls, latency, etc.) |
+| `!faq-add Q \| A` | Manually add a FAQ |
+| `!faq-list [search]` | List or search FAQs |
+| `!faq-threshold 0.85` | Set similarity threshold, disable adaptive |
+| `!faq-adaptive` | Re-enable adaptive threshold mode |
+| `!faq-remove` | Instructions for removing FAQs via 👎 reactions |
 
 ## Architecture
 

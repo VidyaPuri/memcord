@@ -7,7 +7,6 @@ import logging
 import os
 import time
 from abc import abstractmethod
-from typing import Any
 
 from memcord.backends import LLMBackend
 
@@ -52,15 +51,9 @@ class BaseBackend(LLMBackend):
         circuit_break_threshold: int = 5,
     ) -> None:
         # Env-var overrides with sensible defaults
-        self.timeout = (
-            timeout
-            if timeout is not None
-            else int(os.getenv("MEMCORD_TIMEOUT", "60"))
-        )
+        self.timeout = timeout if timeout is not None else int(os.getenv("MEMCORD_TIMEOUT", "60"))
         self.max_retries = (
-            max_retries
-            if max_retries is not None
-            else int(os.getenv("MEMCORD_RETRY_MAX", "3"))
+            max_retries if max_retries is not None else int(os.getenv("MEMCORD_RETRY_MAX", "3"))
         )
         self.retry_delay = (
             retry_delay
@@ -129,9 +122,7 @@ class BaseBackend(LLMBackend):
         # Circuit breaker check (fail-fast)
         remaining = self._circuit_open_until - time.monotonic()
         if remaining > 0:
-            raise CircuitBreakerOpenError(
-                f"Circuit breaker open — {remaining:.1f}s remaining"
-            )
+            raise CircuitBreakerOpenError(f"Circuit breaker open — {remaining:.1f}s remaining")
 
         last_error: Exception | None = None
 
@@ -145,9 +136,7 @@ class BaseBackend(LLMBackend):
                 return result
 
             except asyncio.TimeoutError:
-                last_error = RetryableError(
-                    f"Request timed out after {self.timeout}s"
-                )
+                last_error = RetryableError(f"Request timed out after {self.timeout}s")
                 logger.warning(
                     "%s: timeout on attempt %d/%d (limit=%ds)",
                     type(self).__name__,

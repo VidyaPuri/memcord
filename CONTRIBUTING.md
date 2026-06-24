@@ -7,33 +7,40 @@ git clone https://github.com/VidyaPuri/memcord
 cd memcord
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[openai,anthropic,ollama]"
+pip install -e ".[dev,openai,anthropic,ollama]"
 ```
 
 ## Running Tests
 
 ```bash
-pytest tests/ -v
+pytest
 ```
 
 First run downloads SentenceBERT (~80MB) — subsequent runs are instant.
 
+## Linting
+
+```bash
+ruff check .
+ruff format --check .
+```
+
 ## Adding a New Backend
 
-1. Implement `LLMBackend` protocol in `memcord/backends/your_backend.py`:
+1. Implement `BaseBackend` in `memcord/backends/your_backend.py`:
 
 ```python
-from memcord.backends import LLMBackend
+from memcord.backends.base import BaseBackend
 
-class MyBackend:
-    async def ask(self, prompt: str, system: str | None = None) -> str:
-        # Your implementation here
+class MyBackend(BaseBackend):
+    async def _ask_impl(self, prompt: str, system: str | None = None) -> str:
+        # Your implementation here — retry/circuit-breaker handled by BaseBackend
         return response
 ```
 
 2. Register it in `memcord/backends/__init__.py` factory function
 
-3. Add optional dependency in `pyproject.toml`
+3. Add optional dependency in `pyproject.toml` `[project.optional-dependencies]`
 
 4. Add env var docs to `.env.example`
 

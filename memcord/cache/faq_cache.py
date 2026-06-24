@@ -65,9 +65,7 @@ class FAQCache:
 
         # Feedback threshold — env var MEMCORD_FEEDBACK_THRESHOLD or default 0.80
         if feedback_threshold is None:
-            feedback_threshold = float(
-                os.getenv("MEMCORD_FEEDBACK_THRESHOLD", "0.80")
-            )
+            feedback_threshold = float(os.getenv("MEMCORD_FEEDBACK_THRESHOLD", "0.80"))
         self.feedback_threshold = feedback_threshold
 
         # Consolidation threshold
@@ -103,6 +101,7 @@ class FAQCache:
         """Lazy-load the SentenceTransformer model on first access."""
         if self.__model is None:
             from sentence_transformers import SentenceTransformer
+
             self.__model = SentenceTransformer(self._model_name)
         return self.__model
 
@@ -152,7 +151,9 @@ class FAQCache:
 
         embedding = self._model.encode([question])[0].tolist()
         results = self._collection.query(
-            query_embeddings=[embedding], n_results=1, include=["documents", "distances"]
+            query_embeddings=[embedding],
+            n_results=1,
+            include=["documents", "metadatas", "distances"],
         )
 
         if not results["ids"][0]:
@@ -164,16 +165,22 @@ class FAQCache:
 
         if similarity >= self.threshold:
             self._hits += 1
-            # Bump counter, return the cached answer (stored in metadata)
-            meta = self._collection.get(ids=[results["ids"][0][0]], include=["metadatas"])
-            full_meta = meta["metadatas"][0] if meta["metadatas"] else {}
+            # Read answer directly from query result metadata (no second DB call)
+            full_meta = results["metadatas"][0][0] if results["metadatas"] else {}
             answer = full_meta.get("answer", "")
             count = full_meta.get("count", 1)
             rating = full_meta.get("rating", 0)
             created_at = full_meta.get("created_at", 0)
             self._collection.update(
                 ids=[results["ids"][0][0]],
-                metadatas=[{"answer": answer, "count": count + 1, "rating": rating, "created_at": created_at}],
+                metadatas=[
+                    {
+                        "answer": answer,
+                        "count": count + 1,
+                        "rating": rating,
+                        "created_at": created_at,
+                    }
+                ],
             )
             if self.adaptive:
                 self._adjust()
@@ -211,12 +218,14 @@ class FAQCache:
 
                     self._collection.update(
                         ids=[results["ids"][0][0]],
-                        metadatas=[{
-                            "answer": keep_answer,
-                            "count": existing_count + 1,
-                            "rating": existing_rating,
-                            "created_at": existing_created_at,
-                        }],
+                        metadatas=[
+                            {
+                                "answer": keep_answer,
+                                "count": existing_count + 1,
+                                "rating": existing_rating,
+                                "created_at": existing_created_at,
+                            }
+                        ],
                     )
                     self._maybe_save_stats()
                     return
@@ -261,12 +270,14 @@ class FAQCache:
         else:
             self._collection.update(
                 ids=[results["ids"][0][0]],
-                metadatas=[{
-                    "answer": meta.get("answer", ""),
-                    "count": meta.get("count", 1),
-                    "rating": new_rating,
-                    "created_at": meta.get("created_at", 0),
-                }],
+                metadatas=[
+                    {
+                        "answer": meta.get("answer", ""),
+                        "count": meta.get("count", 1),
+                        "rating": new_rating,
+                        "created_at": meta.get("created_at", 0),
+                    }
+                ],
             )
 
         self._maybe_save_stats()
@@ -287,7 +298,6 @@ class FAQCache:
 
         ids = all_data["ids"]
         embeddings = all_data["embeddings"]
-        documents = all_data["documents"]
         metadatas = all_data["metadatas"]
 
         merged = 0
@@ -301,7 +311,7 @@ class FAQCache:
                     continue
                 emb_j = embeddings[j]
                 # Cosine similarity via dot product (normalized embeddings)
-                dot = sum(a * b for a, b in zip(emb_i, emb_j))
+                dot = sum(a * b for a, b in zip(emb_i, emb_j, strict=False))
                 if dot >= self.consolidate_threshold:
                     # Merge j into i: keep the better-rated answer
                     meta_i = metadatas[i] or {}
@@ -314,25 +324,25 @@ class FAQCache:
                     if rating_j > rating_i:
                         # j has better answer, merge i into j
                         winner_id, loser_id = ids[j], ids[i]
-                        winner_meta, loser_meta = meta_j, meta_i
+                        winner_meta = meta_j
                         winner_count, loser_count = count_j, count_i
-                        winner_doc = documents[j]
                     else:
                         # i keeps its answer (or tie)
                         winner_id, loser_id = ids[i], ids[j]
-                        winner_meta, loser_meta = meta_i, meta_j
+                        winner_meta = meta_i
                         winner_count, loser_count = count_i, count_j
-                        winner_doc = documents[i]
 
                     # Update winner with combined counts
                     self._collection.update(
                         ids=[winner_id],
-                        metadatas=[{
-                            "answer": winner_meta.get("answer", ""),
-                            "count": winner_count + loser_count,
-                            "rating": winner_meta.get("rating", 0),
-                            "created_at": winner_meta.get("created_at", 0),
-                        }],
+                        metadatas=[
+                            {
+                                "answer": winner_meta.get("answer", ""),
+                                "count": winner_count + loser_count,
+                                "rating": winner_meta.get("rating", 0),
+                                "created_at": winner_meta.get("created_at", 0),
+                            }
+                        ],
                     )
                     # Delete loser
                     self._collection.delete(ids=[loser_id])
@@ -399,8 +409,7 @@ class FAQCache:
             results = self._collection.get(
                 limit=limit,
                 offset=offset,
-                include=["documents", "metadatas"]
-                + (["embeddings"] if include_embeddings else []),
+                include=["documents", "metadatas"] + (["embeddings"] if include_embeddings else []),
             )
             faqs = []
             for i in range(len(results["ids"])):
@@ -472,14 +481,18 @@ class FAQCache:
             self._stores = data.get("stores", 0)
 
     def _save_stats(self) -> None:
-        self._stats_path.write_text(json.dumps({
-            "total": self._total,
-            "hits": self._hits,
-            "upvotes": self._upvotes,
-            "downvotes": self._downvotes,
-            "deletions": self._deletions,
-            "stores": self._stores,
-        }))
+        self._stats_path.write_text(
+            json.dumps(
+                {
+                    "total": self._total,
+                    "hits": self._hits,
+                    "upvotes": self._upvotes,
+                    "downvotes": self._downvotes,
+                    "deletions": self._deletions,
+                    "stores": self._stores,
+                }
+            )
+        )
         self._stats_queries_since_save = 0
         self._last_stats_save = time.time()
 

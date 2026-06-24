@@ -61,19 +61,15 @@ class ClaudeCodeBackend(BaseBackend):
         stdout, stderr = await proc.communicate()
 
         if proc.returncode != 0:
-            raise RetryableError(
-                f"Claude CLI exited {proc.returncode}: {stderr.decode()}"
-            )
+            raise RetryableError(f"Claude CLI exited {proc.returncode}: {stderr.decode()}")
 
         try:
             data = json.loads(stdout)
         except json.JSONDecodeError as exc:
-            raise RetryableError(f"Claude CLI returned unparseable JSON: {exc}")
+            raise RetryableError(f"Claude CLI returned unparseable JSON: {exc}") from exc
 
         if data.get("subtype") != "success":
-            raise RetryableError(
-                f"Claude CLI error subtype={data.get('subtype', 'unknown')}"
-            )
+            raise RetryableError(f"Claude CLI error subtype={data.get('subtype', 'unknown')}")
 
         return data["result"]
 

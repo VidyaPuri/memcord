@@ -1,6 +1,6 @@
 [Unit]
 Description=Memcord — Self-learning Discord FAQ bot
-Documentation=https://github.com/vid/memcord
+Documentation=https://github.com/VidyaPuri/memcord
 After=network-online.target
 Wants=network-online.target
 

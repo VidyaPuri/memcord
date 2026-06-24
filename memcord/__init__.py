@@ -1,5 +1,8 @@
 """Memcord — LLM-agnostic Discord FAQ bot with semantic caching."""
 
-from importlib.metadata import version
+from importlib.metadata import PackageNotFoundError, version
 
-__version__ = version("memcord")
+try:
+    __version__ = version("memcord")
+except PackageNotFoundError:
+    __version__ = "0.1.0+local"

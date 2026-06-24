@@ -43,9 +43,7 @@ class OllamaBackend(BaseBackend):
             retry_delay=retry_delay,
         )
         self.model = model
-        self.base_url = base_url or os.getenv(
-            "MEMCORD_OLLAMA_URL", "http://localhost:11434"
-        )
+        self.base_url = base_url or os.getenv("MEMCORD_OLLAMA_URL", "http://localhost:11434")
 
     async def _ask_impl(self, prompt: str, system: str | None = None) -> str:
         payload: dict = {"model": self.model, "prompt": prompt, "stream": False}
@@ -53,9 +51,7 @@ class OllamaBackend(BaseBackend):
             payload["system"] = system
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            resp = await client.post(
-                f"{self.base_url}/api/generate", json=payload
-            )
+            resp = await client.post(f"{self.base_url}/api/generate", json=payload)
             resp.raise_for_status()
             data = resp.json()
             return data["response"]

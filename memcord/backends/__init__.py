@@ -6,7 +6,6 @@ import importlib
 import logging
 import os
 from abc import ABC, abstractmethod
-from typing import Any
 
 logger = logging.getLogger("memcord.backends")
 
@@ -59,9 +58,7 @@ def get_backend() -> LLMBackend:
     if backend_name == "custom":
         path = os.getenv("MEMCORD_CUSTOM_BACKEND", "")
         if not path:
-            raise ValueError(
-                "MEMCORD_CUSTOM_BACKEND must be set (e.g. 'mypackage.MyBackend')"
-            )
+            raise ValueError("MEMCORD_CUSTOM_BACKEND must be set (e.g. 'mypackage.MyBackend')")
         module_path, class_name = path.rsplit(".", 1)
         module = importlib.import_module(module_path)
         return getattr(module, class_name)()

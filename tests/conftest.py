@@ -10,7 +10,6 @@ import pytest
 from memcord.backends import LLMBackend
 from memcord.cache import FAQCache
 
-
 # ── MockBackend ────────────────────────────────────────────────────────
 
 
@@ -108,6 +107,8 @@ def mock_backend():
 @pytest.fixture
 def backend_with_responses():
     """Create a MockBackend with preset responses."""
+
     def _make(*responses: str) -> MockBackend:
         return MockBackend(responses=list(responses))
+
     return _make

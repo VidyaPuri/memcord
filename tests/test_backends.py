@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
-
 
 # ── ClaudeCodeBackend tests ────────────────────────────────────────────
 
@@ -46,10 +46,12 @@ class TestClaudeCodeBackend:
 
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(
-            json.dumps({"subtype": "success", "result": "Hello from Claude!"}).encode(),
-            b"",
-        ))
+        mock_proc.communicate = AsyncMock(
+            return_value=(
+                json.dumps({"subtype": "success", "result": "Hello from Claude!"}).encode(),
+                b"",
+            )
+        )
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
             backend = ClaudeCodeBackend()
@@ -63,10 +65,12 @@ class TestClaudeCodeBackend:
 
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(
-            json.dumps({"subtype": "success", "result": "OK"}).encode(),
-            b"",
-        ))
+        mock_proc.communicate = AsyncMock(
+            return_value=(
+                json.dumps({"subtype": "success", "result": "OK"}).encode(),
+                b"",
+            )
+        )
 
         with patch("asyncio.create_subprocess_exec") as mock_exec:
             mock_exec.return_value = mock_proc
@@ -108,10 +112,12 @@ class TestClaudeCodeBackend:
 
         mock_proc = AsyncMock()
         mock_proc.returncode = 0
-        mock_proc.communicate = AsyncMock(return_value=(
-            json.dumps({"subtype": "error", "result": ""}).encode(),
-            b"",
-        ))
+        mock_proc.communicate = AsyncMock(
+            return_value=(
+                json.dumps({"subtype": "error", "result": ""}).encode(),
+                b"",
+            )
+        )
 
         with patch("asyncio.create_subprocess_exec", return_value=mock_proc):
             backend = ClaudeCodeBackend(max_retries=1)
@@ -157,8 +163,8 @@ class TestAnthropicBackend:
 
     def test_inherits_base(self):
         """AnthropicBackend should inherit from BaseBackend."""
-        from memcord.backends.base import BaseBackend
         from memcord.backends.anthropic_backend import AnthropicBackend
+        from memcord.backends.base import BaseBackend
 
         assert issubclass(AnthropicBackend, BaseBackend)
 
@@ -249,6 +255,7 @@ class TestBaseBackend:
     async def test_base_ask_with_retry(self):
         """Retry should be attempted on transient failures."""
         import asyncio
+
         from memcord.backends.base import BaseBackend
 
         call_count = 0
@@ -270,6 +277,7 @@ class TestBaseBackend:
     async def test_base_ask_all_retries_exhausted(self):
         """Should raise FatalError when all retries exhausted."""
         import asyncio
+
         from memcord.backends.base import BaseBackend, FatalError
 
         class TestBackend(BaseBackend):
@@ -297,10 +305,8 @@ class TestBaseBackend:
         )
 
         for _ in range(3):
-            try:
+            with contextlib.suppress(Exception):
                 await backend.ask("hello")
-            except Exception:
-                pass
 
         with pytest.raises(CircuitBreakerOpenError):
             await backend.ask("hello")
@@ -309,6 +315,7 @@ class TestBaseBackend:
     async def test_circuit_breaker_resets_on_success(self):
         """Circuit breaker should reset after a successful request."""
         import asyncio
+
         from memcord.backends.base import BaseBackend
 
         call_count = 0
@@ -323,10 +330,8 @@ class TestBaseBackend:
 
         backend = TestBackend(max_retries=3, retry_delay=0.01, circuit_break_threshold=5)
 
-        try:
+        with contextlib.suppress(Exception):
             await backend.ask("hello")
-        except Exception:
-            pass
 
         result = await backend.ask("hello")
         assert result == "recovered"
@@ -371,12 +376,14 @@ class TestBackendFactory:
     def test_get_backend_defaults_to_claude_code(self):
         """Default backend should be ClaudeCodeBackend."""
         import os
+
         from memcord.backends.claude_code import ClaudeCodeBackend
 
         # Ensure no override
         old = os.environ.pop("MEMCORD_BACKEND", None)
         try:
             from memcord.backends import get_backend
+
             backend = get_backend()
             assert isinstance(backend, ClaudeCodeBackend)
         finally:
@@ -390,6 +397,7 @@ class TestBackendFactory:
         os.environ["MEMCORD_BACKEND"] = "nonexistent"
         try:
             from memcord.backends import get_backend
+
             with pytest.raises(ValueError, match="Unknown backend"):
                 get_backend()
         finally:
@@ -404,10 +412,10 @@ class TestBackendImports:
 
     def test_all_backends_importable(self):
         """All four backends should be importable."""
-        from memcord.backends.claude_code import ClaudeCodeBackend
-        from memcord.backends.openai_backend import OpenAIBackend
         from memcord.backends.anthropic_backend import AnthropicBackend
+        from memcord.backends.claude_code import ClaudeCodeBackend
         from memcord.backends.ollama_backend import OllamaBackend
+        from memcord.backends.openai_backend import OpenAIBackend
 
         assert ClaudeCodeBackend is not None
         assert OpenAIBackend is not None

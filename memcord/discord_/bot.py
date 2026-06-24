@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import re
@@ -13,8 +14,8 @@ from collections import defaultdict, deque
 import discord
 from discord.ext import commands
 
-from memcord.cache import FAQCache
 from memcord.backends import LLMBackend
+from memcord.cache import FAQCache
 from memcord.metrics import Metrics
 from memcord.security import check_prompt_injection
 
@@ -38,6 +39,7 @@ _MENTION_RE = re.compile(r"<@!?\d+>")
 
 
 # ── helpers ────────────────────────────────────────────────
+
 
 def _sanitize_input(content: str) -> str:
     """Strip all @mentions, limit length, handle empty/whitespace-only."""
@@ -80,6 +82,7 @@ def _chunk_text(text: str, size: int = CHUNK_SIZE) -> list[str]:
 
 # ── bot ────────────────────────────────────────────────────
 
+
 class MemcordBot(commands.Bot):
     """The Memcord Discord bot."""
 
@@ -98,7 +101,7 @@ class MemcordBot(commands.Bot):
         intents = discord.Intents.default()
         intents.message_content = True
         intents.reactions = True
-        kwargs.setdefault("command_prefix", "/")
+        kwargs.setdefault("command_prefix", "!")
         kwargs.setdefault("intents", intents)
         super().__init__(*args, **kwargs)
 
@@ -110,6 +113,12 @@ class MemcordBot(commands.Bot):
         # Wire metrics into the cache for deletion tracking
         if hasattr(self.cache, "set_metrics"):
             self.cache.set_metrics(self.metrics)
+
+        # ── cache serialization ─────────────────────────────
+        # FAQCache operations (ChromaDB + SentenceBERT) are synchronous
+        # and block the asyncio event loop. Offload them to a thread pool
+        # and serialize with a lock to prevent ChromaDB race conditions.
+        self._cache_lock = asyncio.Lock()
 
         # ── rate limiting ──────────────────────────────────
         # per-user: deque of timestamps
@@ -133,13 +142,11 @@ class MemcordBot(commands.Bot):
 
     def _setup_signal_handlers(self) -> None:
         """Register SIGINT/SIGTERM handlers for graceful shutdown."""
-        loop = asyncio.get_event_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            try:
-                loop.add_signal_handler(sig, self._handle_shutdown_signal)
-            except (NotImplementedError, RuntimeError):
-                # Windows or non-main-thread — fall back to close() override
-                pass
+        with contextlib.suppress(RuntimeError):
+            loop = asyncio.get_event_loop()
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                with contextlib.suppress(NotImplementedError, RuntimeError):
+                    loop.add_signal_handler(sig, self._handle_shutdown_signal)
 
     def _handle_shutdown_signal(self) -> None:
         """Schedule graceful shutdown."""
@@ -209,9 +216,7 @@ class MemcordBot(commands.Bot):
 
         # ── rate limiting ──────────────────────────────────
         if not self._check_rate_limit(message.author.id):
-            log.warning(
-                f"Rate limit hit for user {message.author} ({message.author.id})"
-            )
+            log.warning(f"Rate limit hit for user {message.author} ({message.author.id})")
             await message.reply(
                 f"⏳ You're asking too fast — please wait {RATE_WINDOW}s between batches of {RATE_LIMIT} questions."
             )
@@ -231,12 +236,8 @@ class MemcordBot(commands.Bot):
 
         # ── security: prompt injection detection ────────────
         if check_prompt_injection(content):
-            log.warning(
-                f"Prompt injection detected — blocked message from {message.author}"
-            )
-            await message.reply(
-                "I can't process that request. Please ask a different question."
-            )
+            log.warning(f"Prompt injection detected — blocked message from {message.author}")
+            await message.reply("I can't process that request. Please ask a different question.")
             return
 
         # ── conversation context ───────────────────────────
@@ -256,7 +257,8 @@ class MemcordBot(commands.Bot):
                 context_str += "\n\n"
 
         # 1. Check FAQ cache
-        cached, similarity = self.cache.check(content)
+        async with self._cache_lock:
+            cached, similarity = await asyncio.to_thread(self.cache.check, content)
         if cached:
             self.metrics.cache_hit()
             log.info(f'FAQ HIT similarity={similarity:.3f} — "{content[:60]}..."')
@@ -276,9 +278,7 @@ class MemcordBot(commands.Bot):
             try:
                 full_prompt = context_str + content if context_str else content
                 t0 = time.time()
-                response = await self.backend.ask(
-                    full_prompt, system=self.system_prompt
-                )
+                response = await self.backend.ask(full_prompt, system=self.system_prompt)
                 latency_ms = (time.time() - t0) * 1000
                 self.metrics.llm_call(latency_ms)
             except Exception as e:
@@ -288,7 +288,8 @@ class MemcordBot(commands.Bot):
                 return
 
         # 3. Store in cache
-        self.cache.store(content, response)
+        async with self._cache_lock:
+            await asyncio.to_thread(self.cache.store, content, response)
 
         # 4. Reply with feedback buttons (chunked)
         reply = await self._send_chunked(message, response)
@@ -298,25 +299,28 @@ class MemcordBot(commands.Bot):
 
         await self.process_commands(message)
 
-    async def on_reaction_add(
-        self, reaction: discord.Reaction, user: discord.User
-    ) -> None:
-        if user.bot:
+    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent) -> None:
+        # Ignore self-reactions (works in DMs where payload.member is None)
+        if payload.user_id == self.user.id:
             return
-        if reaction.emoji not in ("👍", "👎"):
+        # Ignore bot reactions
+        if payload.member and payload.member.bot:
+            return
+        if str(payload.emoji) not in ("👍", "👎"):
             return
 
-        msg = reaction.message
+        # Fetch the message (works across restarts)
+        channel = self.get_channel(payload.channel_id)
+        if channel is None:
+            return
+        try:
+            msg = await channel.fetch_message(payload.message_id)
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+            return
+
         # Only track reactions on the bot's own messages
         if msg.author != self.user:
             return
-
-        # Only track the first reaction per user
-        for r in msg.reactions:
-            if r.emoji in ("👍", "👎") and r.emoji != reaction.emoji:
-                async for u in r.users():
-                    if u == user:
-                        return
 
         # Find which question this was answering
         if not msg.reference or not msg.reference.resolved:
@@ -325,14 +329,24 @@ class MemcordBot(commands.Bot):
         if not question:
             return
 
-        self.cache.feedback(question, positive=(reaction.emoji == "👍"))
-        if reaction.emoji == "👍":
+        # One vote per user — check if they already reacted with the other emoji
+        for r in msg.reactions:
+            if str(r.emoji) not in ("👍", "👎"):
+                continue
+            if str(r.emoji) == str(payload.emoji):
+                continue
+            async for u in r.users():
+                if u.id == payload.user_id:
+                    return  # already voted
+
+        positive = str(payload.emoji) == "👍"
+        async with self._cache_lock:
+            await asyncio.to_thread(self.cache.feedback, question, positive=positive)
+        if positive:
             self.metrics.feedback_up()
         else:
             self.metrics.feedback_down()
-        log.info(
-            f"Feedback {'+' if reaction.emoji == '👍' else '-'} on FAQ: \"{question[:50]}...\""
-        )
+        log.info(f'Feedback {"+" if positive else "-"} on FAQ: "{question[:50]}..."')
 
     # ── rate limiting ──────────────────────────────────────
 
@@ -354,9 +368,7 @@ class MemcordBot(commands.Bot):
 
     # ── response chunking ──────────────────────────────────
 
-    async def _send_chunked(
-        self, message: discord.Message, text: str
-    ) -> discord.Message | None:
+    async def _send_chunked(self, message: discord.Message, text: str) -> discord.Message | None:
         """Send a potentially long response as multiple messages. Returns the first message sent."""
         chunks = _chunk_text(text)
         if not chunks:
@@ -386,6 +398,7 @@ class MemcordBot(commands.Bot):
 
 # ── helper to access the bot ───────────────────────────────
 
+
 def _get_bot(ctx: commands.Context) -> MemcordBot | None:
     """Safely get the MemcordBot instance without isinstance."""
     bot = ctx.bot
@@ -394,20 +407,19 @@ def _get_bot(ctx: commands.Context) -> MemcordBot | None:
     return None
 
 
-# ── slash commands ─────────────────────────────────────────
+# ── prefix commands (!) ──────────────────────────────────────
+
 
 @commands.command(name="listen", aliases=["li"])
 async def listen(ctx: commands.Context) -> None:
     """Start listening to @mentions in this server."""
-    await ctx.send(
-        "I'm always listening for @mentions! Just tag me or reply to my messages."
-    )
+    await ctx.send("I'm always listening for @mentions! Just tag me or reply to my messages.")
 
 
 @commands.command(name="stop", aliases=["s"])
 async def stop(ctx: commands.Context) -> None:
     """Stop the bot."""
-    await ctx.send("Use Ctrl+C in the terminal or `/shutdown` to stop the bot.")
+    await ctx.send("Use Ctrl+C in the terminal to stop the bot.")
 
 
 @commands.command(name="faq-stats", aliases=["faq"])
@@ -431,7 +443,7 @@ async def faq_stats(ctx: commands.Context) -> None:
 
 @commands.command(name="faq-list")
 async def faq_list(ctx: commands.Context, query: str = "") -> None:
-    """Show recent FAQs or search for specific ones. Usage: /faq-list [search term]"""
+    """Show recent FAQs or search for specific ones. Usage: !faq-list [search term]"""
     bot = _get_bot(ctx)
     if not bot:
         return
@@ -476,9 +488,9 @@ async def faq_list(ctx: commands.Context, query: str = "") -> None:
 
 @commands.command(name="faq-add")
 async def faq_add(ctx: commands.Context, *, text: str = "") -> None:
-    """Manually add a FAQ. Format: /faq-add question | answer"""
+    """Manually add a FAQ. Format: !faq-add question | answer"""
     if "|" not in text:
-        await ctx.send("Usage: `/faq-add question | answer`")
+        await ctx.send("Usage: `!faq-add question | answer`")
         return
     question, answer = text.split("|", 1)
     bot = _get_bot(ctx)
@@ -499,9 +511,7 @@ async def faq_remove(ctx: commands.Context) -> None:
 async def faq_threshold(ctx: commands.Context, value: float = 0) -> None:
     """Set the FAQ cache similarity threshold (0.0 - 1.0)."""
     if not 0.0 < value <= 1.0:
-        await ctx.send(
-            "Threshold must be between 0.0 and 1.0. Example: `/faq-threshold 0.85`"
-        )
+        await ctx.send("Threshold must be between 0.0 and 1.0. Example: `!faq-threshold 0.85`")
         return
     bot = _get_bot(ctx)
     if bot:
@@ -516,9 +526,7 @@ async def faq_adaptive(ctx: commands.Context) -> None:
     bot = _get_bot(ctx)
     if bot:
         bot.cache.adaptive = True
-        await ctx.send(
-            f"Adaptive threshold enabled. Current threshold: {bot.cache.threshold:.3f}"
-        )
+        await ctx.send(f"Adaptive threshold enabled. Current threshold: {bot.cache.threshold:.3f}")
 
 
 @commands.command(name="faq-metrics", aliases=["metrics"])
