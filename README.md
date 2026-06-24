@@ -30,7 +30,7 @@ Memcord intercepts questions, checks if a semantically similar question has been
 - **LLM-agnostic**: Claude Code, OpenAI, Anthropic, Ollama, or [bring your own](#custom-backends)
 - **Feedback loop**: 👍👎 reactions improve the cache; 3 downvotes auto-deletes bad FAQs
 - **Pluggable backends**: one Protocol, four implementations, zero lock-in
-- **Admin commands**: `/faq-stats`, `/faq-add`, `/faq-list`, `/faq-threshold`, `/faq-adaptive`
+- **Admin commands**: `!faq-stats`, `!faq-add`, `!faq-list`, `!faq-threshold`, `!faq-adaptive`
 
 ## Quick Start
 
