@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 import uuid
@@ -10,7 +11,8 @@ from pathlib import Path
 from typing import Any
 
 import chromadb
-from sentence_transformers import SentenceTransformer
+
+log = logging.getLogger("memcord.cache")
 
 
 # Schema version for migration support
@@ -46,7 +48,7 @@ class FAQCache:
 
         # Embedding model — lazy loaded on first use
         self._model_name = model_name
-        self.__model: SentenceTransformer | None = None
+        self.__model = None  # type: ignore[assignment]
 
         # ChromaDB
         self._chroma = chromadb.PersistentClient(
@@ -97,9 +99,10 @@ class FAQCache:
     # ── lazy model loading ──────────────────────────────────
 
     @property
-    def _model(self) -> SentenceTransformer:
+    def _model(self):
         """Lazy-load the SentenceTransformer model on first access."""
         if self.__model is None:
+            from sentence_transformers import SentenceTransformer
             self.__model = SentenceTransformer(self._model_name)
         return self.__model
 

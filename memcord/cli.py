@@ -55,14 +55,16 @@ async def _async_run(health_port: int, token: str, metrics_enabled: bool = True)
     from memcord.discord_ import MemcordBot
     from memcord.health import start_health_server, stop_health_server
     from memcord.metrics import Metrics
+    from memcord.model_presets import resolve_model
 
     cache = FAQCache(
         data_dir=os.getenv("MEMCORD_DATA_DIR", "./memcord_data"),
+        model_name=resolve_model(os.getenv("MEMCORD_EMBEDDING_MODEL", "fast")),
         similarity_threshold=float(os.getenv("MEMCORD_SIMILARITY_THRESHOLD", "0.80")),
         adaptive_threshold=os.getenv("MEMCORD_ADAPTIVE_THRESHOLD", "true").lower() != "false",
         feedback_threshold=float(os.getenv("MEMCORD_FEEDBACK_THRESHOLD", "0.80")),
     )
-
+    log.info(f"Embedding model: {cache._model_name}")
     backend = _get_backend()
     log.info(f"Backend: {type(backend).__name__}")
     log.info(f"Cache: threshold={cache.threshold}, adaptive={cache.adaptive}")
