@@ -15,7 +15,15 @@ from typing import Any, Callable
 
 import chromadb
 
-from memcord.cache import CacheHit
+from dataclasses import dataclass
+
+
+@dataclass
+class CacheHit:
+    """A cache hit — returned by lookup()."""
+
+    id: str
+    answer: str
 
 log = logging.getLogger("memcord.cache")
 

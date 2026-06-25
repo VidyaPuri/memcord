@@ -2,18 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Protocol
 
 from memcord.cache.faq_cache import FAQCache
-
-
-@dataclass
-class CacheHit:
-    """A cache hit — returned by lookup()."""
-
-    id: str
-    answer: str
+from memcord.cache.semantic_cache import CacheHit, SemanticAnswerCache, build_cache
 
 
 class AnswerCache(Protocol):
@@ -26,6 +18,8 @@ class AnswerCache(Protocol):
 
 __all__ = [
     "FAQCache",
+    "SemanticAnswerCache",
+    "build_cache",
     "CacheHit",
     "AnswerCache",
 ]
