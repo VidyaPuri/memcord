@@ -109,6 +109,32 @@ Pass `embed_model` to `build_cache()` or `SemanticAnswerCache.__init__()`:
 - `str` → model name for SentenceTransformer
 - Any object with `.encode(list[str]) → list[list[float]]`
 
+Resolution is handled by `memcord.embedding.resolve_embed_model()`, which is also
+available for external use.
+
+### CacheHit Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `str` | ChromaDB document ID — usable with `vote()` |
+| `answer` | `str` | The cached answer text |
+| `similarity` | `float` | Cosine similarity score (0.0–1.0) of the match |
+
+### Consolidation vs Lookup Threshold
+
+`observe()` merges a new observation into an existing entry only when similarity ≥
+`consolidate_threshold` (default 0.95). `lookup()` matches at `similarity_threshold`
+(default 0.80). Paraphrases in the 0.80–0.95 band create separate singletons that
+never accumulate toward `promote_after`. To treat varied phrasings as the same
+question for promotion, lower `consolidate_threshold` closer to
+`similarity_threshold`.
+
+### Schema Migration
+
+The collection auto-migrates from v1 → v2 on first access:
+- Adds `scope` (defaulting to `scope_default`) to all existing entries
+- Adds `observation_count` (set to a high value so existing entries are immediately promoted)
+
 ## Key Design Decisions
 
 ### Why ChromaDB + SentenceBERT instead of OpenAI embeddings?

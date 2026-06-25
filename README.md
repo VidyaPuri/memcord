@@ -54,8 +54,9 @@ if hit:
   - `should_cache(answer) → bool` — gates which answers are stored
   - `validate(CacheHit) → bool` — filters candidates at lookup time
 - **Conservative promotion** (`promote_after=N`): entries become retrievable only after being observed N times (default 1 = immediate)
-- **Pluggable embedding model** via `build_cache(embed_model=...)`
 - **Quality voting**: `cache.vote(hit_id, +1/-1)` with automatic downvote-prune
+- **Pluggable embedding**: via `build_cache(embed_model=...)` or `memcord.embedding.resolve_embed_model()`
+- **`data_dir` is the canonical parameter name** for the cache path — passing `cache_dir` will fail
 
 ### Example: Custom Hooks
 
