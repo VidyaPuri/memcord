@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from memcord.backends import LLMBackend
-from memcord.cache import FAQCache
+from memcord.cache import FAQCache, SemanticAnswerCache
 
 # ── MockBackend ────────────────────────────────────────────────────────
 
@@ -96,6 +96,16 @@ def tmp_cache_dir(tmp_path):
 def cache(tmp_cache_dir):
     """Create a fresh FAQCache instance for testing."""
     return FAQCache(data_dir=tmp_cache_dir)
+
+
+@pytest.fixture
+def semantic_cache(tmp_cache_dir):
+    """Create a fresh SemanticAnswerCache instance for testing."""
+    return SemanticAnswerCache(
+        data_dir=tmp_cache_dir,
+        scope_default="test",
+        promote_after=1,
+    )
 
 
 @pytest.fixture
