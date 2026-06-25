@@ -24,6 +24,7 @@ class CacheHit:
 
     id: str
     answer: str
+    similarity: float = 0.0
 
 log = logging.getLogger("memcord.cache")
 
@@ -191,7 +192,7 @@ class SemanticAnswerCache:
             if self.adaptive:
                 self._adjust()
             self._maybe_save_stats()
-            return candidate
+            return CacheHit(id=hit_id, answer=answer, similarity=similarity)
 
         if self.adaptive:
             self._adjust()

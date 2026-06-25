@@ -309,13 +309,13 @@ class TestFAQCacheLazyLoading:
 
     def test_model_not_loaded_at_init(self, cache):
         """Model should not be loaded on init."""
-        # Access the name-mangled attribute
-        assert cache._FAQCache__model is None
+        # __model is defined in SemanticAnswerCache, so it name-mangles to that class
+        assert cache._SemanticAnswerCache__model is None
 
     def test_model_loaded_on_first_use(self, cache):
         """Model should be loaded on first encode operation."""
         cache.store("Hello?", "World")
-        assert cache._FAQCache__model is not None
+        assert cache._SemanticAnswerCache__model is not None
 
 
 class TestFAQCacheConsolidation:
