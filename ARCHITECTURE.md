@@ -55,6 +55,60 @@
 └──────────────────────────────────────────────────┘
 ```
 
+## Cache Library Architecture
+
+The FAQ cache is now a reusable library. `SemanticAnswerCache` (in `memcord/cache/semantic_cache.py`) is the core implementation — it has no knowledge of Discord, backends, or the CLI. `FAQCache` is a thin backward-compatible subclass that exposes the original API for the bundled bot.
+
+```
+┌────────────────────────────────────────────┐
+│         SemanticAnswerCache (core)          │
+│                                             │
+│  lookup(q, scope)      → CacheHit | None   │
+│  observe(q, a, scope)  → None              │
+│  vote(hit_id, delta)   → None              │
+│                                             │
+│  Hooks:                                     │
+│    should_cache(answer) → bool              │
+│    validate(CacheHit)   → bool              │
+│                                             │
+│  Gates:                                     │
+│    promote_after=N (observation_count)      │
+│    scope partitioning (ChromaDB where)      │
+│                                             │
+│  Embedding: pluggable (embed_model=...)     │
+└──────────────────┬─────────────────────────┘
+                   │ inherits
+┌──────────────────▼─────────────────────────┐
+│              FAQCache (legacy)              │
+│                                             │
+│  check(q)      → (str|None, float)         │
+│  store(q, a)   → None                      │
+│  feedback(q, ±)→ None                      │
+│                                             │
+│  Used by: Discord bot (unchanged)           │
+└────────────────────────────────────────────┘
+```
+
+### Scope Partitioning
+
+Scope is an opaque string stored as ChromaDB metadata. All vector queries are filtered with `where={"scope": scope}`. An entry stored under `scope="support"` is never returned for `scope="sales"`.
+
+### Promotion Gate (`promote_after`)
+
+Each entry carries an `observation_count` metadata field. `observe()` increments it. `lookup()` only returns entries where `observation_count >= promote_after`. Setting `promote_after=1` reproduces the original immediate-promotion behavior.
+
+### Hooks
+
+- **`should_cache(answer)`**: Called in `observe()`. If it returns `False`, the answer is silently dropped. Default: `lambda _: True`.
+- **`validate(CacheHit)`**: Called in `lookup()` on every candidate. If it returns `False`, the candidate is discarded. Default: `lambda _: True`.
+
+### Pluggable Embedding
+
+Pass `embed_model` to `build_cache()` or `SemanticAnswerCache.__init__()`:
+- `None` → default `all-MiniLM-L6-v2` via SentenceTransformer
+- `str` → model name for SentenceTransformer
+- Any object with `.encode(list[str]) → list[list[float]]`
+
 ## Key Design Decisions
 
 ### Why ChromaDB + SentenceBERT instead of OpenAI embeddings?

@@ -32,6 +32,44 @@ Memcord intercepts questions, checks if a semantically similar question has been
 - **Pluggable backends**: one Protocol, four implementations, zero lock-in
 - **Admin commands**: `!faq-stats`, `!faq-add`, `!faq-list`, `!faq-threshold`, `!faq-adaptive`
 
+## Cache as a Standalone Library
+
+The FAQ cache is now a reusable library — other applications can embed it without pulling in Discord, backends, or the CLI:
+
+```python
+from memcord import SemanticAnswerCache, build_cache, CacheHit
+
+# Simple usage
+cache = build_cache(data_dir="./my_cache")
+cache.observe("how do I install?", "Run: pip install myapp", scope="support")
+hit = cache.lookup("how do I install?", scope="support")
+if hit:
+    print(hit.answer)  # cached!
+```
+
+### Features
+
+- **Scoped partitioning**: `scope` is an opaque key — entries under `scope="a"` are never returned for `scope="b"`
+- **Caller-driven hooks**:
+  - `should_cache(answer) → bool` — gates which answers are stored
+  - `validate(CacheHit) → bool` — filters candidates at lookup time
+- **Conservative promotion** (`promote_after=N`): entries become retrievable only after being observed N times (default 1 = immediate)
+- **Pluggable embedding model** via `build_cache(embed_model=...)`
+- **Quality voting**: `cache.vote(hit_id, +1/-1)` with automatic downvote-prune
+
+### Example: Custom Hooks
+
+```python
+cache = build_cache(
+    data_dir="./cache",
+    promote_after=3,                              # only after 3 observations
+    should_cache=lambda a: len(a) > 5,            # drop very short answers
+    validate=lambda hit: "safe" in hit.answer,     # only serve safe answers
+)
+```
+
+The bundled Discord bot remains one consumer of this library — it still imports `FAQCache` unchanged.
+
 ## Quick Start
 
 ```bash
