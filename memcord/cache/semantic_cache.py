@@ -525,16 +525,9 @@ class SemanticAnswerCache:
     def _model(self):
         """Lazy-load the embedding model on first access."""
         if self.__model is None:
-            if self._embed_model_spec is None:
-                from sentence_transformers import SentenceTransformer
+            from memcord.embedding import resolve_embed_model
 
-                self.__model = SentenceTransformer("all-MiniLM-L6-v2")
-            elif isinstance(self._embed_model_spec, str):
-                from sentence_transformers import SentenceTransformer
-
-                self.__model = SentenceTransformer(self._embed_model_spec)
-            else:
-                self.__model = self._embed_model_spec
+            self.__model = resolve_embed_model(self._embed_model_spec)
         return self.__model
 
     # ── migration ───────────────────────────────────────────
@@ -657,8 +650,13 @@ def build_cache(
     """Build a SemanticAnswerCache instance.
 
     All keyword arguments are forwarded to ``SemanticAnswerCache.__init__``.
-    Common provider options: ``data_dir``, ``embed_model``,
-    ``similarity_threshold``, ``adaptive_threshold``, ``consolidate_threshold``.
+
+    Required provider option:
+        ``data_dir`` (str) — path to the cache data directory.
+
+    Common optional provider options:
+        ``embed_model``, ``similarity_threshold``, ``adaptive_threshold``,
+        ``consolidate_threshold``.
 
     Args:
         scope_default: Default scope when ``lookup``/``observe`` is called without one.
@@ -666,6 +664,7 @@ def build_cache(
         should_cache: Optional callable(answer) → bool; False drops the answer.
         validate: Optional callable(CacheHit) → bool; False discards the candidate.
         **provider_options: Passed through to ``SemanticAnswerCache.__init__``.
+          Must include ``data_dir``.
     """
     return SemanticAnswerCache(
         scope_default=scope_default,

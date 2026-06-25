@@ -10,6 +10,50 @@
 
 ---
 
+## Interface Contract (shared between memcord and consumers)
+
+### Canonical provider option: `data_dir`
+
+The only **required** provider option passed through `build_cache(**provider_options)`
+is ``data_dir`` (str) — the path to the cache data directory.
+
+**Consumer teams MUST pass `data_dir=...`, not `cache_dir`.**
+
+| Is | Isn't |
+|----|-------|
+| `build_cache(data_dir="/path")` ✅ | `build_cache(cache_dir="/path")` ❌  — TypeError |
+
+The parameter maps directly to `SemanticAnswerCache.__init__(data_dir=...)`.
+Passing a different name causes `TypeError: unexpected keyword argument` and the
+cache silently fails to build.
+
+### Common optional provider options
+
+| Parameter | Type | Default | Notes |
+|-----------|------|---------|-------|
+| `embed_model` | str \| object \| None | `None` (→ `all-MiniLM-L6-v2`) | Model name or callable with `.encode()` |
+| `similarity_threshold` | float | `0.80` | Cosine similarity floor for a hit |
+| `adaptive_threshold` | bool | `True` | Auto-tune threshold based on hit rate |
+| `consolidate_threshold` | float | `0.95` | Similarity above which `observe` merges into an existing entry |
+| `feedback_threshold` | float | `0.80` (env: `MEMCORD_FEEDBACK_THRESHOLD`) | Minimum similarity for feedback attribution |
+
+### Promotion threshold pitfall
+
+`observe()` merges a new observation into an existing entry only when similarity ≥
+`consolidate_threshold` (default 0.95). `lookup()` matches at `similarity_threshold`
+(default 0.80). Paraphrases in the 0.80–0.95 band each spawn separate singletons
+that never accumulate toward `promote_after` and remain invisible.
+
+If your use case expects varied phrasings to promote, lower `consolidate_threshold`
+closer to `similarity_threshold`:
+
+```python
+cache = build_cache(data_dir="./cache", promote_after=3,
+                    similarity_threshold=0.80, consolidate_threshold=0.82)
+```
+
+---
+
 ## Key Design Decisions
 
 ### Scope filtering via ChromaDB `where` clause
